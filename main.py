@@ -7,15 +7,15 @@ from q_network import Network
 from image import imageGrabber
 import gym
 
-DEVICE = '/cpu:0'
+DEVICE = '/gpu:0'
 
 # Base learning rate 
 LEARNING_RATE = 0.001
 # Soft target update param
 TAU = 0.001
 RANDOM_SEED = 11543521#1234
-EXPLORE = 40000
-SIMULATION_LENGTH = 1000
+EXPLORE = 400000
+
 
 N_ACTIONS = 4
 SIZE_FRAME = 84
@@ -60,7 +60,7 @@ def trainer(epochs=1000, MINIBATCH_SIZE=16, GAMMA = 0.99,save=1, save_image=1, e
 
         for i in range(epochs):
 
-            if (i%200 == 0) and (i != 0): 
+            if (i%500 == 0) and (i != 0): 
                 print('*************************')
                 print('now we save the model')
                 agent.save()
@@ -73,6 +73,7 @@ def trainer(epochs=1000, MINIBATCH_SIZE=16, GAMMA = 0.99,save=1, save_image=1, e
             IG.reset()
             observation = env.reset()
             state = IG.setInitState(observation) 
+            print(state,state.size,state.shape, 'state')
             q0 = np.zeros(4)
             ep_reward = 0.
             done = False
@@ -97,11 +98,11 @@ def trainer(epochs=1000, MINIBATCH_SIZE=16, GAMMA = 0.99,save=1, save_image=1, e
                     # Just stick to what you know bro
                     q0 = agent.predict(np.reshape(state,(1,SIZE_FRAME,SIZE_FRAME,4)) ) 
                     action = np.argmax(q0)        
-            
+            	
                 observation, reward, done, info = env.step(action)
                 #if render: env.render()
                 next_state = IG.get_state(observation)
-               
+               	
                 
                 if train_indicator:
                     
@@ -125,8 +126,8 @@ def trainer(epochs=1000, MINIBATCH_SIZE=16, GAMMA = 0.99,save=1, save_image=1, e
 
                        
                         #5.3 Train agent! 
-                        #print(q_target)
-                        algo = agent.train(np.reshape(s_batch,(-1,SIZE_FRAME,SIZE_FRAME,4)),np.reshape(q_target,(MINIBATCH_SIZE, 4)) )
+                        #train(inputs, prediction)
+                        agent.train(np.reshape(s_batch,(-1,SIZE_FRAME,SIZE_FRAME,4)),np.reshape(q_target,(MINIBATCH_SIZE, 4)) )
                         
                         
                         
@@ -144,8 +145,9 @@ def trainer(epochs=1000, MINIBATCH_SIZE=16, GAMMA = 0.99,save=1, save_image=1, e
                 step +=1
                 
                 
-                print(step, action, q0, round(epsilon,3), round(reward,3))#, round(loop_time,3), nseconds)#'epsilon',epsilon_to_print )
-               
+                #end2 = time.time()
+                #print(step, action, q0, round(epsilon,3), round(reward,3))#, round(loop_time,3), nseconds)#'epsilon',epsilon_to_print )
+               	#print(end-start, end2 - start)
                  
             
             print('reseting noise')
