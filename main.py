@@ -7,7 +7,7 @@ from q_network import Network
 from image import imageGrabber
 import gym
 
-DEVICE = '/gpu:0'
+DEVICE = '/cpu:0'
 
 # Base learning rate 
 LEARNING_RATE = 0.001
@@ -73,7 +73,7 @@ def trainer(epochs=1000, MINIBATCH_SIZE=16, GAMMA = 0.99,save=1, save_image=1, e
             IG.reset()
             observation = env.reset()
             state = IG.setInitState(observation) 
-            print(state,state.size,state.shape, 'state')
+            #print(state,state.size,state.shape, 'state')
             q0 = np.zeros(4)
             ep_reward = 0.
             done = False
@@ -146,7 +146,7 @@ def trainer(epochs=1000, MINIBATCH_SIZE=16, GAMMA = 0.99,save=1, save_image=1, e
                 
                 
                 #end2 = time.time()
-                #print(step, action, q0, round(epsilon,3), round(reward,3))#, round(loop_time,3), nseconds)#'epsilon',epsilon_to_print )
+                print(step, action, q0, round(epsilon,3), round(reward,3))#, round(loop_time,3), nseconds)#'epsilon',epsilon_to_print )
                	#print(end-start, end2 - start)
                  
             

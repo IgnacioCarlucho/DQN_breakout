@@ -55,17 +55,21 @@ class Network(object):
         with tf.device(self.device):
             with tf.variable_scope(scope): 
 
-                W_conv1 = tf.Variable(tf.random_normal([8,8,1,32]))
+                W_conv1 = tf.Variable(tf.random_normal([8,8,4,32]))
                 W_conv2 = tf.Variable(tf.random_normal([4,4,32,64]))
                 W_conv3 = tf.Variable(tf.random_normal([3,3,64,64]))
-                W_fc = tf.Variable(tf.random_normal([8*8*64,512]))
-                W_out = tf.Variable(tf.random_normal([512, self.a_dim]))
+                
+                #W_fc = tf.Variable(tf.random_normal([7*7*64,512])*np.sqrt(2./(7*7*64)))
+                #W_out = tf.Variable( tf.random_normal([512, self.a_dim])*np.sqrt(1./(512)) )
+
+                W_fc = tf.Variable(np.random.uniform(size=(7*7*64,512),low= -0.0003, high=0.0003 ).astype(np.float32))
+                W_out = tf.Variable(np.random.uniform(size=(512,self.a_dim),low= -0.0003, high=0.0003 ).astype(np.float32))
 
                 b_conv1 = tf.Variable(tf.random_normal([32]))
                 b_conv2 = tf.Variable(tf.random_normal([64]))
                 b_conv3 = tf.Variable(tf.random_normal([64]))
-                b_fc = tf.Variable(tf.random_normal([1024]))
-                b_out = tf.Variable(tf.random_normal([self.a_dim]))
+                b_fc = tf.Variable(np.zeros([512]).astype(np.float32))
+                b_out = tf.Variable(np.zeros([self.a_dim]).astype(np.float32))
                 # input
                 stateInput = tf.placeholder(tf.float32, shape=[None,self.SIZE_FRAME,self.SIZE_FRAME,4]) # 84,84,4
 
@@ -79,7 +83,7 @@ class Network(object):
                 conv3 = tf.nn.relu(self.conv2d(conv2, W_conv3,1) + b_conv3)
                 #conv2 = maxpool2d(conv2)
                 # fully connected layer
-                fc = tf.reshape(conv3,[-1, 8*8*64])
+                fc = tf.reshape(conv3,[-1, 7*7*64])
                 fc = tf.nn.relu(tf.matmul(fc,W_fc)+ b_fc)
                 # ouput layer
                 out = tf.matmul(fc, W_out)+ b_out
