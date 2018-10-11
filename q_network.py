@@ -1,9 +1,6 @@
 
 import tensorflow as tf
 import numpy as np
-# ===========================
-#   Actor and Critic DNNs
-# ===========================
 
 
 
@@ -15,11 +12,10 @@ class Network(object):
     between -2 and 2
     """
 
-    def __init__(self, sess, SIZE_FRAME, action_dim, learning_rate, tau, device):
+    def __init__(self, sess, SIZE_FRAME, action_dim, learning_rate, device):
         self.sess = sess
         self.a_dim = action_dim
         self.learning_rate = learning_rate
-        self.tau = tau
         self.currentState = -1.
         self.device = device
         self.SIZE_FRAME = SIZE_FRAME
@@ -36,17 +32,28 @@ class Network(object):
 
         # Op for periodically updating target network with online network
         # weights
-        self.update_target_network_params = \
-            [self.target_network_params[i].assign(tf.multiply(self.network_params[i], self.tau) +
-                                                  tf.multiply(self.target_network_params[i], 1. - self.tau))
-                for i in range(len(self.target_network_params))]
+        self.update_target_network_params = [self.target_network_params[i].assign(self.network_params[i]) for i in range(len(self.target_network_params))]
 
         with tf.device(self.device):
+
+            self.target_q_t = tf.placeholder(tf.float32, [None, self.a_dim], name='target_q')
+            self.action = tf.placeholder(tf.int32, [None, 1])
+            # obtain the q scores of the selected action
+            action_one_hot = tf.one_hot(self.action, self.a_dim, 1.0, 0.0, name='action_one_hot')
+            q_acted = tf.reduce_sum(self.out * action_one_hot, reduction_indices=1, name='q_acted')
             
-            self.predicted_q_value = tf.placeholder(tf.float32, [None, self.a_dim])
-            # Define loss and optimization Op
-            self.loss = tf.reduce_mean(tf.square(tf.subtract(self.predicted_q_value,self.out)))
-            self.optimize = tf.train.AdamOptimizer(self.learning_rate).minimize(self.loss)
+            self.delta = tf.subtract(tf.stop_gradient(self.target_q_t), q_acted)
+            #self.loss = self.clipped_error(self.delta)
+            self.loss = tf.reduce_mean(self.clipped_error(self.delta), name='loss')
+            
+            self.optimizer = tf.train.AdamOptimizer(self.learning_rate)
+            gradients = self.optimizer.compute_gradients(self.loss)
+            for i, (grad, var) in enumerate(gradients):
+                if grad is not None:
+                    gradients[i] = (tf.clip_by_norm(grad, 5.), var)
+            self.optimize = self.optimizer.apply_gradients(gradients)
+
+
 
         self.num_trainable_vars = len(self.network_params) + len(self.target_network_params)
 
@@ -54,7 +61,7 @@ class Network(object):
 
         with tf.device(self.device):
             with tf.variable_scope(scope): 
-
+                '''
                 W_conv1 = tf.Variable(tf.random_normal([8,8,4,32]))
                 W_conv2 = tf.Variable(tf.random_normal([4,4,32,64]))
                 W_conv3 = tf.Variable(tf.random_normal([3,3,64,64]))
@@ -71,8 +78,12 @@ class Network(object):
                 b_fc = tf.Variable(np.zeros([512]).astype(np.float32))
                 b_out = tf.Variable(np.zeros([self.a_dim]).astype(np.float32))
                 # input
+                '''
+                #b_out = tf.Variable(np.zeros([self.a_dim]).astype(np.float32))
+                #W_out = tf.Variable(np.random.uniform(size=(512,self.a_dim),low= -0.0003, high=0.0003 ).astype(np.float32))
                 stateInput = tf.placeholder(tf.float32, shape=[None,self.SIZE_FRAME,self.SIZE_FRAME,4]) # 84,84,4
-
+                
+                '''
                 # first cnn layer
                 conv1 = tf.nn.relu(self.conv2d(stateInput, W_conv1,4) + b_conv1)
                 #conv1 = maxpool2d(conv1)
@@ -82,11 +93,21 @@ class Network(object):
                 # third cnn layer
                 conv3 = tf.nn.relu(self.conv2d(conv2, W_conv3,1) + b_conv3)
                 #conv2 = maxpool2d(conv2)
+                '''
+                #X = tf.to_float(stateInput) / 255.0
+                conv1 = tf.contrib.layers.conv2d(stateInput, 32, 8, 4, activation_fn=tf.nn.relu)
+                conv2 = tf.contrib.layers.conv2d(conv1, 64, 4, 2, activation_fn=tf.nn.relu)
+                conv3 = tf.contrib.layers.conv2d(conv2, 64, 3, 1, activation_fn=tf.nn.relu)
+
                 # fully connected layer
-                fc = tf.reshape(conv3,[-1, 7*7*64])
-                fc = tf.nn.relu(tf.matmul(fc,W_fc)+ b_fc)
+                flattened = tf.contrib.layers.flatten(conv3)
+                fc = tf.contrib.layers.fully_connected(flattened, 512)
+                out = tf.contrib.layers.fully_connected(fc, self.a_dim,activation_fn=None)
+                #out = tf.contrib.layers.fully_connected(fc, self.a_dim, activation_fn=None)
+                # out = tf.matmul(fc, W_out)+ b_out
+                #fc = tf.nn.relu(tf.matmul(flattened,W_fc)+ b_fc)
                 # ouput layer
-                out = tf.matmul(fc, W_out)+ b_out
+                #out = tf.matmul(fc, W_out)+ b_out
                 #output = tf.nn.softmax(tf.matmul(fc, W_out)+ b_out)
                 '''
                 # Xavier initialization: 
@@ -117,11 +138,12 @@ class Network(object):
         return stateInput, out, saver
 
         
-    def train(self, inputs, predicted_q_value):
+    def train(self, actions, target_q_t, inputs):
         with tf.device(self.device):
             self.sess.run(self.optimize, feed_dict={
-                self.inputs: inputs,
-                self.predicted_q_value: predicted_q_value
+                self.action: actions,
+                self.target_q_t: target_q_t,
+                self.inputs: inputs
             })
 
     def predict(self, inputs):
@@ -158,3 +180,10 @@ class Network(object):
     def conv2d(self,x, W, stride):
         with tf.device(self.device):
             return tf.nn.conv2d(x, W, strides = [1, stride, stride, 1], padding = "VALID")
+
+    def clipped_error(self,x):
+      # Huber loss
+      try:
+        return tf.select(tf.abs(x) < 1.0, 0.5 * tf.square(x), tf.abs(x) - 0.5)
+      except:
+        return tf.where(tf.abs(x) < 1.0, 0.5 * tf.square(x), tf.abs(x) - 0.5)
