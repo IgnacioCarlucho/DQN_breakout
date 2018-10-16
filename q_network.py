@@ -48,9 +48,9 @@ class Network(object):
             
             self.optimizer = tf.train.AdamOptimizer(self.learning_rate)
             gradients = self.optimizer.compute_gradients(self.loss)
-            for i, (grad, var) in enumerate(gradients):
-                if grad is not None:
-                    gradients[i] = (tf.clip_by_norm(grad, 5.), var)
+            #for i, (grad, var) in enumerate(gradients):
+            #    if grad is not None:
+            #        gradients[i] = (tf.clip_by_norm(grad, 5.), var)
             self.optimize = self.optimizer.apply_gradients(gradients)
 
 
@@ -81,10 +81,10 @@ class Network(object):
                 '''
                 #b_out = tf.Variable(np.zeros([self.a_dim]).astype(np.float32))
                 #W_out = tf.Variable(np.random.uniform(size=(512,self.a_dim),low= -0.0003, high=0.0003 ).astype(np.float32))
-                stateInput = tf.placeholder(tf.float32, shape=[None,self.SIZE_FRAME,self.SIZE_FRAME,4]) # 84,84,4
+                stateInput = tf.placeholder(tf.uint8, shape=[None,self.SIZE_FRAME,self.SIZE_FRAME,4], name='stateInput') # 84,84,4
                 
                 '''
-                # first cnn layer
+                # first cnn lay
                 conv1 = tf.nn.relu(self.conv2d(stateInput, W_conv1,4) + b_conv1)
                 #conv1 = maxpool2d(conv1)
                 # second cnn layer
@@ -94,12 +94,14 @@ class Network(object):
                 conv3 = tf.nn.relu(self.conv2d(conv2, W_conv3,1) + b_conv3)
                 #conv2 = maxpool2d(conv2)
                 '''
-                #X = tf.to_float(stateInput) / 255.0
-                conv1 = tf.contrib.layers.conv2d(stateInput, 32, 8, 4, activation_fn=tf.nn.relu)
+                X = tf.to_float(stateInput) / 255.0
+                #X = tf.reshape(stateInput,shape=[-1, self.SIZE_FRAME, self.SIZE_FRAME, 4])
+                conv1 = tf.contrib.layers.conv2d(X, 32, 8, 4, activation_fn=tf.nn.relu)
                 conv2 = tf.contrib.layers.conv2d(conv1, 64, 4, 2, activation_fn=tf.nn.relu)
                 conv3 = tf.contrib.layers.conv2d(conv2, 64, 3, 1, activation_fn=tf.nn.relu)
 
                 # fully connected layer
+
                 flattened = tf.contrib.layers.flatten(conv3)
                 fc = tf.contrib.layers.fully_connected(flattened, 512)
                 out = tf.contrib.layers.fully_connected(fc, self.a_dim,activation_fn=None)
