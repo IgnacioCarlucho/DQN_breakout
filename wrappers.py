@@ -193,8 +193,9 @@ class ProcessFrame84(gym.ObservationWrapper):
         x_t = resized_screen[18:102, :]
         x_t = np.reshape(x_t, [84, 84, 1])
         x_t = x_t.astype(np.uint8)
-        #cv2.imshow('image', x_t)
-        #cv2.waitKey(1)
+        # cv2.imshow('image', frame)
+        # cv2.imshow('image', x_t)
+        # cv2.waitKey(1)
         return x_t# .astype(np.uint8)
 
 

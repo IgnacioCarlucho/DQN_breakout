@@ -2,7 +2,7 @@
 import tensorflow as tf
 import numpy as np
 
-
+EPSILON = 0.1
 
 class Network(object):
     """
@@ -21,38 +21,52 @@ class Network(object):
         self.SIZE_FRAME = SIZE_FRAME
         
         # Q network
-        self.inputs, self.out, self.saver = self.create_q_network('q')
+        self.inputs, self.out, self.saver, self.X = self.create_q_network('q')
         self.network_params = tf.trainable_variables()
 
         # Target Network
-        self.target_inputs, self.target_out, self.target_saver = self.create_q_network('q_target')
+        self.target_inputs, self.target_out, self.target_saver, self.target_X = self.create_q_network('q_target')
 
-        self.target_network_params = tf.trainable_variables()[
-            len(self.network_params):]
+        self.target_network_params = tf.trainable_variables()[len(self.network_params):]
 
         # Op for periodically updating target network with online network
         # weights
-        self.update_target_network_params = [self.target_network_params[i].assign(self.network_params[i]) for i in range(len(self.target_network_params))]
+        #self.update_target_network_params = [self.target_network_params[i].assign(self.network_params[i]) for i in range(len(self.target_network_params))]
+        self.update_target_network_params = [oldp.assign(p) for p, oldp in zip(self.network_params, self.target_network_params)] # vf_params, vf_old_params
+
+
+        #self.global_step = tf.train.get_or_create_global_step()
+        #epsilon_decay = tf.train.polynomial_decay(EPSILON, self.global_step, 1e5, 0.01, power=0.0)
+
 
         with tf.device(self.device):
 
-            self.target_q_t = tf.placeholder(tf.float32, [None, self.a_dim], name='target_q')
-            self.action = tf.placeholder(tf.int32, [None, 1])
+            self.target_q_t = tf.placeholder(tf.float32, [None, 1], name='target_q')
+            self.action = tf.placeholder(tf.int32, [None, 1], name='action')
             # obtain the q scores of the selected action
-            action_one_hot = tf.one_hot(self.action, self.a_dim, 1.0, 0.0, name='action_one_hot')
-            q_acted = tf.reduce_sum(self.out * action_one_hot, reduction_indices=1, name='q_acted')
-            
-            self.delta = tf.subtract(tf.stop_gradient(self.target_q_t), q_acted)
+            self.action_one_hot = tf.one_hot(self.action, self.a_dim, name='action_one_hot')
+            self.q_acted_0 = self.out * tf.squeeze(self.action_one_hot)
+            self.q_acted = tf.reduce_sum(self.q_acted_0, reduction_indices=1, name='q_acted')
+
+            #self.action_one_hot = tf.one_hot(self.action, self.a_dim, 1.0, 0.0, name='action_one_hot')
+            #self.q_acted = tf.reduce_sum(self.out * self.action_one_hot, reduction_indices=1, name='q_acted')
+            #self.q_reduced = tf.reduce_mean(self.q_acted, axis=1)
+
+            #self.delta = tf.subtract(tf.stop_gradient(self.target_q_t), q_acted)
             #self.loss = self.clipped_error(self.delta)
+            #self.loss = tf.reduce_mean(self.clipped_error(self.delta), name='loss')
+            self.target_final = tf.squeeze(self.target_q_t)
+            self.delta = tf.subtract(tf.stop_gradient(self.target_final), self.q_acted)
             self.loss = tf.reduce_mean(self.clipped_error(self.delta), name='loss')
-            
+
+            #self.loss = tf.losses.huber_loss(self.target_final, self.q_acted, reduction=tf.losses.Reduction.MEAN)
             self.optimizer = tf.train.AdamOptimizer(self.learning_rate)
             gradients = self.optimizer.compute_gradients(self.loss)
-            #for i, (grad, var) in enumerate(gradients):
-            #    if grad is not None:
-            #        gradients[i] = (tf.clip_by_norm(grad, 5.), var)
+            for i, (grad, var) in enumerate(gradients):
+                if grad is not None:
+                    gradients[i] = (tf.clip_by_norm(grad, 5.), var)
             self.optimize = self.optimizer.apply_gradients(gradients)
-
+            
 
 
         self.num_trainable_vars = len(self.network_params) + len(self.target_network_params)
@@ -96,15 +110,15 @@ class Network(object):
                 '''
                 X = tf.to_float(stateInput) / 255.0
                 #X = tf.reshape(stateInput,shape=[-1, self.SIZE_FRAME, self.SIZE_FRAME, 4])
-                conv1 = tf.contrib.layers.conv2d(X, 32, 8, 4, activation_fn=tf.nn.relu)
-                conv2 = tf.contrib.layers.conv2d(conv1, 64, 4, 2, activation_fn=tf.nn.relu)
-                conv3 = tf.contrib.layers.conv2d(conv2, 64, 3, 1, activation_fn=tf.nn.relu)
+                conv1 = tf.contrib.layers.conv2d(X, 32, 8, 4, activation_fn=tf.nn.leaky_relu)
+                conv2 = tf.contrib.layers.conv2d(conv1, 64, 4, 2, activation_fn=tf.nn.leaky_relu)
+                conv3 = tf.contrib.layers.conv2d(conv2, 64, 3, 1, activation_fn=tf.nn.leaky_relu)
 
                 # fully connected layer
 
                 flattened = tf.contrib.layers.flatten(conv3)
-                fc = tf.contrib.layers.fully_connected(flattened, 512)
-                out = tf.contrib.layers.fully_connected(fc, self.a_dim,activation_fn=None)
+                fc = tf.contrib.layers.fully_connected(flattened, 512, activation_fn=tf.nn.leaky_relu)
+                out = tf.contrib.layers.fully_connected(fc, self.a_dim, activation_fn=None)
                 #out = tf.contrib.layers.fully_connected(fc, self.a_dim, activation_fn=None)
                 # out = tf.matmul(fc, W_out)+ b_out
                 #fc = tf.nn.relu(tf.matmul(flattened,W_fc)+ b_fc)
@@ -137,12 +151,20 @@ class Network(object):
                 out = tf.matmul(h_fc1,W_fc2) + b_fc2
                 '''
         saver = tf.train.Saver()
-        return stateInput, out, saver
+        return stateInput, out, saver, conv3
 
         
     def train(self, actions, target_q_t, inputs):
         with tf.device(self.device):
-            self.sess.run(self.optimize, feed_dict={
+            return self.sess.run([self.loss, self.optimize], feed_dict={
+                self.action: actions,
+                self.target_q_t: target_q_t,
+                self.inputs: inputs
+            })
+
+    def train_v2(self, actions, target_q_t, inputs):
+        with tf.device(self.device):
+            return self.sess.run([self.target_final, self.q_acted, self.delta, self.loss, self.optimize], feed_dict={
                 self.action: actions,
                 self.target_q_t: target_q_t,
                 self.inputs: inputs
@@ -150,7 +172,7 @@ class Network(object):
 
     def predict(self, inputs):
         with tf.device(self.device):
-            return self.sess.run(self.out, feed_dict={
+            return self.sess.run([self.out, self.X], feed_dict={
                 self.inputs: inputs
             })
 

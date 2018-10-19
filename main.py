@@ -6,8 +6,9 @@ import gym
 import wrappers as wp
 import cv2
 import time
+from collections import deque
 DEVICE = '/gpu:0'
-
+np.set_printoptions(threshold=np.nan)
 # Base learning rate 
 LEARNING_RATE = 4*1e-4
 # Soft target update param
@@ -24,10 +25,11 @@ def trainer(epochs=1000, MINIBATCH_SIZE=32, GAMMA = 0.99,save=1, save_image=1, e
         tf.set_random_seed(RANDOM_SEED)
         # set evironment
         # robot = gym_environment('FrozenLakeNonskid4x4-v3', False, False, False) 
+        # breakout
         #env = gym.make('BreakoutDeterministic-v4')
-        env = wp.wrap_dqn(gym.make('BreakoutDeterministic-v4'))
+        #env = wp.wrap_dqn(gym.make('BreakoutDeterministic-v4'))
         # Pong-v0
-        #env= wp.wrap_dqn(gym.make('PongDeterministic-v4'))
+        env= wp.wrap_dqn(gym.make('PongDeterministic-v4'))
         agent = Network(sess,SIZE_FRAME,N_ACTIONS,LEARNING_RATE,DEVICE)
         #IG=imageGrabber()
         
@@ -57,34 +59,34 @@ def trainer(epochs=1000, MINIBATCH_SIZE=32, GAMMA = 0.99,save=1, save_image=1, e
         algo = 0
         total_frames_counter = 0 
         frames_number = 0
+        frames_to_save = 0
         while total_frames_counter < 4000000:
             
-            if (total_frames_counter%500 == 0) : 
-                print('*************************')
-                print('now we save the model')
+            if frames_to_save > 10000:
                 agent.save()
-                #replay_buffer.save()
-                print('model saved succesfuly')
-                print('*************************')
-                
-            if frames_number > 10000: 
-                 agent.update_target_network()
-                 frames_number = 0
-                 print('update_target_network')
+                frames_to_save = 0
 
-            
+            if frames_number > 1000:#10000: 
+                agent.update_target_network()
+                frames_number = 0
+                print('update_target_network and save network')
+                # agent.save()
+                # replay_buffer.save()
             
             state = env.reset()
             q0 = np.zeros(N_ACTIONS)
             ep_reward = 0.
             done = False
             step = 0
+            total_loss = deque()
+            loss = 0.
             while not done:
                
                 frames_number = frames_number + 1
+                frames_to_save = frames_to_save + 1 
                 total_frames_counter = total_frames_counter + 1
                 if total_frames_counter > 20000:
-                    epsilon -= 0.00000075
+                    epsilon -= 0.00001 # 0.00000085
                     epsilon = np.maximum(min_epsilon,epsilon)
                     train_indicator = True
                 else:
@@ -93,10 +95,10 @@ def trainer(epochs=1000, MINIBATCH_SIZE=32, GAMMA = 0.99,save=1, save_image=1, e
                 
                 
                 # for visualization
-                #numpy_horizontal = np.hstack((np.array(state)[:,:,0], np.array(state)[:,:,1], np.array(state)[:,:,2],np.array(state)[:,:,3]))
-                #cv2.imshow('image', numpy_horizontal)
-                #cv2.waitKey(1)
-                #time.sleep(0.5)
+                # numpy_horizontal = np.hstack((np.array(state)[:,:,0], np.array(state)[:,:,1], np.array(state)[:,:,2],np.array(state)[:,:,3]))
+                # cv2.imshow('image', numpy_horizontal)
+                # cv2.waitKey(1)
+                # time.sleep(0.05)
                 
                 # 1. get action with e greedy
                 if np.random.random_sample() < epsilon:
@@ -105,9 +107,11 @@ def trainer(epochs=1000, MINIBATCH_SIZE=32, GAMMA = 0.99,save=1, save_image=1, e
                 else:
                     # Just stick to what you know bro
                     
-                    q0 = agent.predict(np.reshape(np.array(state).astype(np.uint8),[-1,SIZE_FRAME,SIZE_FRAME,4])) 
+                    q0, X = agent.predict(np.reshape(np.array(state).astype(np.uint8),[-1,SIZE_FRAME,SIZE_FRAME,4])) 
+                    
                     action = np.argmax(q0)
-                
+                    # print(q0)
+
                 
                 
                 next_state, reward, done, info = env.step(action)#env.step(action)
@@ -125,17 +129,21 @@ def trainer(epochs=1000, MINIBATCH_SIZE=32, GAMMA = 0.99,save=1, save_image=1, e
                         
                         
                         q_eval = agent.predict_target(s2_batch)
-                        q_target = q_eval.copy()
+                        #q_target = q_eval.copy()
+                        q_target = np.zeros(MINIBATCH_SIZE)
+
                         for k in range(MINIBATCH_SIZE):
                             if t_batch[k]:
                                 #print(q_target[k])
-                                q_target[k][a_batch[k]] = r_batch[k]
+                                q_target[k] = r_batch[k]
                             else:
                                 # TODO check that we are grabbing the max of the triplet
-                                q_target[k][a_batch[k]] = r_batch[k] + GAMMA * np.max(q_eval[k])
+                                q_target[k] = r_batch[k] + GAMMA * np.max(q_eval[k])
                         #5.3 Train agent! 
-                        agent.train(np.reshape(a_batch,(MINIBATCH_SIZE,1)),np.reshape(q_target,(MINIBATCH_SIZE,N_ACTIONS)), s_batch )
-                
+                        #print(q_target, a_batch)
+                        loss, _ = agent.train(np.reshape(a_batch,(MINIBATCH_SIZE,1)),np.reshape(q_target,(MINIBATCH_SIZE,1)), s_batch )
+                        # target_final, q_acted, delta, loss, optimize = agent.train_v2(np.reshape(a_batch,(MINIBATCH_SIZE,1)),np.reshape(q_target,(MINIBATCH_SIZE,1)), s_batch )
+                        # print('target_final', target_final, 'q_acted', q_acted, 'delta', delta, 'loss', loss)
                 # 3. Save in replay buffer:
                 replay_buffer.add(state,action,reward,done,next_state) 
                 
@@ -144,9 +152,10 @@ def trainer(epochs=1000, MINIBATCH_SIZE=32, GAMMA = 0.99,save=1, save_image=1, e
                 state = next_state
                 ep_reward = ep_reward + reward
                 step +=1
-                
+                total_loss.append(loss)
             
-            print('th',total_frames_counter+1,'Step', step,'Reward:',ep_reward,'epsilon', round(epsilon,3), algo)
+            print('th',total_frames_counter+1,'Step', step,'Reward:',ep_reward,'epsilon', round(epsilon,3), np.mean(total_loss))
+
             # print('the reward at the end of the episode,', reward)
             
                         
@@ -162,4 +171,4 @@ def trainer(epochs=1000, MINIBATCH_SIZE=32, GAMMA = 0.99,save=1, save_image=1, e
 
 
 if __name__ == '__main__':
-    trainer(epochs=20000 ,save_image = False, epsilon= 1., train_indicator = True) # 0.8
+    trainer(epochs=20000 ,save_image = False, epsilon= 0.001, train_indicator = True) # 0.8
