@@ -4,20 +4,19 @@ from replay_buffer_v1 import ReplayBuffer
 from q_network import Network
 import gym
 import wrappers as wp
-import cv2
-import time
 from collections import deque
+
+
+
 DEVICE = '/gpu:0'
 np.set_printoptions(threshold=np.nan)
 # Base learning rate 
-LEARNING_RATE = 4*1e-4
-# Soft target update param
+LEARNING_RATE = 0.0001
 RANDOM_SEED = 1234
-
 N_ACTIONS = 4
 SIZE_FRAME = 84
 
-def trainer(epochs=1000, MINIBATCH_SIZE=32, GAMMA = 0.99,save=1, save_image=1, epsilon=1.0, min_epsilon=0.1, BUFFER_SIZE=500000, train_indicator=True, render = True):
+def trainer(MINIBATCH_SIZE=32, GAMMA = 0.99,save=1, save_image=1, epsilon=1.0, min_epsilon=0.1, BUFFER_SIZE=500000, train_indicator=True, render = True):
     with tf.Session() as sess:
 
         # configuring the random processes
@@ -26,12 +25,12 @@ def trainer(epochs=1000, MINIBATCH_SIZE=32, GAMMA = 0.99,save=1, save_image=1, e
         # set evironment
         # robot = gym_environment('FrozenLakeNonskid4x4-v3', False, False, False) 
         # breakout
-        #env = gym.make('BreakoutDeterministic-v4')
-        #env = wp.wrap_dqn(gym.make('BreakoutDeterministic-v4'))
+        # env = gym.make('BreakoutDeterministic-v4')
+        env = wp.wrap_dqn(gym.make('BreakoutDeterministic-v4'))
         # Pong-v0
-        env= wp.wrap_dqn(gym.make('PongDeterministic-v4'))
+        # env= wp.wrap_dqn(gym.make('PongDeterministic-v4'))
         agent = Network(sess,SIZE_FRAME,N_ACTIONS,LEARNING_RATE,DEVICE)
-        #IG=imageGrabber()
+        
         
         
         # TENSORFLOW init seession
@@ -56,20 +55,20 @@ def trainer(epochs=1000, MINIBATCH_SIZE=32, GAMMA = 0.99,save=1, save_image=1, e
                 print('********************************')
         
        
-        algo = 0
+        
         total_frames_counter = 0 
         frames_number = 0
         frames_to_save = 0
-        while total_frames_counter < 4000000:
+        while total_frames_counter < 10000000:
             
             if frames_to_save > 10000:
                 agent.save()
                 frames_to_save = 0
 
-            if frames_number > 1000:#10000: 
+            if frames_number > 10000: 
                 agent.update_target_network()
                 frames_number = 0
-                print('update_target_network and save network')
+                print('update_target_network')
                 # agent.save()
                 # replay_buffer.save()
             
@@ -86,13 +85,12 @@ def trainer(epochs=1000, MINIBATCH_SIZE=32, GAMMA = 0.99,save=1, save_image=1, e
                 frames_to_save = frames_to_save + 1 
                 total_frames_counter = total_frames_counter + 1
                 if total_frames_counter > 20000:
-                    epsilon -= 0.00001 # 0.00000085
+                    epsilon -= 0.00000085
                     epsilon = np.maximum(min_epsilon,epsilon)
                     train_indicator = True
                 else:
                     train_indicator = False #True
                     
-                
                 
                 # for visualization
                 # numpy_horizontal = np.hstack((np.array(state)[:,:,0], np.array(state)[:,:,1], np.array(state)[:,:,2],np.array(state)[:,:,3]))
@@ -106,13 +104,8 @@ def trainer(epochs=1000, MINIBATCH_SIZE=32, GAMMA = 0.99,save=1, save_image=1, e
                     action = np.random.randint(0,N_ACTIONS)
                 else:
                     # Just stick to what you know bro
-                    
                     q0, X = agent.predict(np.reshape(np.array(state).astype(np.uint8),[-1,SIZE_FRAME,SIZE_FRAME,4])) 
-                    
                     action = np.argmax(q0)
-                    # print(q0)
-
-                
                 
                 next_state, reward, done, info = env.step(action)#env.step(action)
                 # state = observation
@@ -123,32 +116,26 @@ def trainer(epochs=1000, MINIBATCH_SIZE=32, GAMMA = 0.99,save=1, save_image=1, e
                     # there are at least minibatch size samples
                     if replay_buffer.size() > MINIBATCH_SIZE:
 
-                        
                         # 4. sample random minibatch of transitions: 
                         s_batch, a_batch, r_batch, t_batch, s2_batch = replay_buffer.sample_batch(MINIBATCH_SIZE)
                         
-                        
                         q_eval = agent.predict_target(s2_batch)
-                        #q_target = q_eval.copy()
                         q_target = np.zeros(MINIBATCH_SIZE)
 
                         for k in range(MINIBATCH_SIZE):
                             if t_batch[k]:
-                                #print(q_target[k])
                                 q_target[k] = r_batch[k]
                             else:
-                                # TODO check that we are grabbing the max of the triplet
                                 q_target[k] = r_batch[k] + GAMMA * np.max(q_eval[k])
+                        
                         #5.3 Train agent! 
-                        #print(q_target, a_batch)
                         loss, _ = agent.train(np.reshape(a_batch,(MINIBATCH_SIZE,1)),np.reshape(q_target,(MINIBATCH_SIZE,1)), s_batch )
+                        # in case you want to understand the innner workings of this
                         # target_final, q_acted, delta, loss, optimize = agent.train_v2(np.reshape(a_batch,(MINIBATCH_SIZE,1)),np.reshape(q_target,(MINIBATCH_SIZE,1)), s_batch )
                         # print('target_final', target_final, 'q_acted', q_acted, 'delta', delta, 'loss', loss)
+                
                 # 3. Save in replay buffer:
                 replay_buffer.add(state,action,reward,done,next_state) 
-                
-                # prepare for next state
-                #state = IG.update() 
                 state = next_state
                 ep_reward = ep_reward + reward
                 step +=1
@@ -171,4 +158,4 @@ def trainer(epochs=1000, MINIBATCH_SIZE=32, GAMMA = 0.99,save=1, save_image=1, e
 
 
 if __name__ == '__main__':
-    trainer(epochs=20000 ,save_image = False, epsilon= 0.001, train_indicator = True) # 0.8
+    trainer(save_image = False, epsilon= 1. , train_indicator = True) 

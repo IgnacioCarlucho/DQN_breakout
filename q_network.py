@@ -30,14 +30,11 @@ class Network(object):
         self.target_network_params = tf.trainable_variables()[len(self.network_params):]
 
         # Op for periodically updating target network with online network
-        # weights
         #self.update_target_network_params = [self.target_network_params[i].assign(self.network_params[i]) for i in range(len(self.target_network_params))]
-        self.update_target_network_params = [oldp.assign(p) for p, oldp in zip(self.network_params, self.target_network_params)] # vf_params, vf_old_params
+        self.update_target_network_params = [oldp.assign(p) for p, oldp in zip(self.network_params, self.target_network_params)]
 
 
-        #self.global_step = tf.train.get_or_create_global_step()
-        #epsilon_decay = tf.train.polynomial_decay(EPSILON, self.global_step, 1e5, 0.01, power=0.0)
-
+       
 
         with tf.device(self.device):
 
@@ -48,18 +45,12 @@ class Network(object):
             self.q_acted_0 = self.out * tf.squeeze(self.action_one_hot)
             self.q_acted = tf.reduce_sum(self.q_acted_0, reduction_indices=1, name='q_acted')
 
-            #self.action_one_hot = tf.one_hot(self.action, self.a_dim, 1.0, 0.0, name='action_one_hot')
-            #self.q_acted = tf.reduce_sum(self.out * self.action_one_hot, reduction_indices=1, name='q_acted')
-            #self.q_reduced = tf.reduce_mean(self.q_acted, axis=1)
-
-            #self.delta = tf.subtract(tf.stop_gradient(self.target_q_t), q_acted)
-            #self.loss = self.clipped_error(self.delta)
-            #self.loss = tf.reduce_mean(self.clipped_error(self.delta), name='loss')
+           
             self.target_final = tf.squeeze(self.target_q_t)
             self.delta = tf.subtract(tf.stop_gradient(self.target_final), self.q_acted)
             self.loss = tf.reduce_mean(self.clipped_error(self.delta), name='loss')
 
-            #self.loss = tf.losses.huber_loss(self.target_final, self.q_acted, reduction=tf.losses.Reduction.MEAN)
+            
             self.optimizer = tf.train.AdamOptimizer(self.learning_rate)
             gradients = self.optimizer.compute_gradients(self.loss)
             for i, (grad, var) in enumerate(gradients):
@@ -75,41 +66,11 @@ class Network(object):
 
         with tf.device(self.device):
             with tf.variable_scope(scope): 
-                '''
-                W_conv1 = tf.Variable(tf.random_normal([8,8,4,32]))
-                W_conv2 = tf.Variable(tf.random_normal([4,4,32,64]))
-                W_conv3 = tf.Variable(tf.random_normal([3,3,64,64]))
                 
-                #W_fc = tf.Variable(tf.random_normal([7*7*64,512])*np.sqrt(2./(7*7*64)))
-                #W_out = tf.Variable( tf.random_normal([512, self.a_dim])*np.sqrt(1./(512)) )
-
-                W_fc = tf.Variable(np.random.uniform(size=(7*7*64,512),low= -0.0003, high=0.0003 ).astype(np.float32))
-                W_out = tf.Variable(np.random.uniform(size=(512,self.a_dim),low= -0.0003, high=0.0003 ).astype(np.float32))
-
-                b_conv1 = tf.Variable(tf.random_normal([32]))
-                b_conv2 = tf.Variable(tf.random_normal([64]))
-                b_conv3 = tf.Variable(tf.random_normal([64]))
-                b_fc = tf.Variable(np.zeros([512]).astype(np.float32))
-                b_out = tf.Variable(np.zeros([self.a_dim]).astype(np.float32))
-                # input
-                '''
-                #b_out = tf.Variable(np.zeros([self.a_dim]).astype(np.float32))
-                #W_out = tf.Variable(np.random.uniform(size=(512,self.a_dim),low= -0.0003, high=0.0003 ).astype(np.float32))
                 stateInput = tf.placeholder(tf.uint8, shape=[None,self.SIZE_FRAME,self.SIZE_FRAME,4], name='stateInput') # 84,84,4
-                
-                '''
-                # first cnn lay
-                conv1 = tf.nn.relu(self.conv2d(stateInput, W_conv1,4) + b_conv1)
-                #conv1 = maxpool2d(conv1)
-                # second cnn layer
-                conv2 = tf.nn.relu(self.conv2d(conv1, W_conv2,2) + b_conv2)
-                #conv2 = maxpool2d(conv2)
-                # third cnn layer
-                conv3 = tf.nn.relu(self.conv2d(conv2, W_conv3,1) + b_conv3)
-                #conv2 = maxpool2d(conv2)
-                '''
+               
                 X = tf.to_float(stateInput) / 255.0
-                #X = tf.reshape(stateInput,shape=[-1, self.SIZE_FRAME, self.SIZE_FRAME, 4])
+               
                 conv1 = tf.contrib.layers.conv2d(X, 32, 8, 4, activation_fn=tf.nn.leaky_relu)
                 conv2 = tf.contrib.layers.conv2d(conv1, 64, 4, 2, activation_fn=tf.nn.leaky_relu)
                 conv3 = tf.contrib.layers.conv2d(conv2, 64, 3, 1, activation_fn=tf.nn.leaky_relu)
@@ -119,37 +80,7 @@ class Network(object):
                 flattened = tf.contrib.layers.flatten(conv3)
                 fc = tf.contrib.layers.fully_connected(flattened, 512, activation_fn=tf.nn.leaky_relu)
                 out = tf.contrib.layers.fully_connected(fc, self.a_dim, activation_fn=None)
-                #out = tf.contrib.layers.fully_connected(fc, self.a_dim, activation_fn=None)
-                # out = tf.matmul(fc, W_out)+ b_out
-                #fc = tf.nn.relu(tf.matmul(flattened,W_fc)+ b_fc)
-                # ouput layer
-                #out = tf.matmul(fc, W_out)+ b_out
-                #output = tf.nn.softmax(tf.matmul(fc, W_out)+ b_out)
-                '''
-                # Xavier initialization: 
-                regularizer = tf.contrib.layers.l2_regularizer(0.1)
-                W_conv1 = tf.get_variable("W_conv1_a", shape=[4,4,4,32],regularizer = regularizer, initializer=tf.contrib.layers.xavier_initializer_conv2d())
-                b_conv1 = tf.Variable(tf.zeros([32]))
-                W_conv2 = tf.get_variable("W_conv2_a", shape=[4,4,32,32],regularizer = regularizer, initializer=tf.contrib.layers.xavier_initializer_conv2d())
-                b_conv2 = tf.Variable(tf.zeros([32]))
-                W_conv3 = tf.get_variable("W_conv3_a", shape=[3,3,32,32],regularizer = regularizer, initializer=tf.contrib.layers.xavier_initializer_conv2d())
-                b_conv3 = tf.Variable(tf.zeros([32]))
-                W_fc1 = tf.get_variable("W_fc1_a", shape=[1568,200],regularizer = regularizer, initializer=tf.contrib.layers.xavier_initializer())
-                b_fc1 = tf.Variable(tf.zeros([200]))
-                W_fc2 = tf.Variable(np.random.uniform(size=(200,self.a_dim),low= -0.0003, high=0.0003 ).astype(np.float32))
-                b_fc2 = tf.Variable(tf.zeros([self.a_dim])) 
                 
-                # input layer
-
-                stateInput = tf.placeholder(tf.float32, shape=[None,self.SIZE_FRAME,self.SIZE_FRAME,4]) # 84,84,4
-                # COnv layers
-                h_conv1 = tf.nn.relu(self.conv2d(stateInput,W_conv1,4) + b_conv1)
-                h_conv2 = tf.nn.relu(self.conv2d(h_conv1,W_conv2,2) + b_conv2)
-                h_conv3 = tf.nn.relu(self.conv2d(h_conv2,W_conv3,1) + b_conv3)
-                h_conv3_flat = tf.reshape(h_conv3,[-1,1568])
-                h_fc1 = tf.nn.relu(tf.matmul(h_conv3_flat,W_fc1) + b_fc1)
-                out = tf.matmul(h_fc1,W_fc2) + b_fc2
-                '''
         saver = tf.train.Saver()
         return stateInput, out, saver, conv3
 
