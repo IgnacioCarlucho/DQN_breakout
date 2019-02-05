@@ -7,7 +7,6 @@ import wrappers as wp
 from collections import deque
 
 
-
 DEVICE = '/gpu:0'
 np.set_printoptions(threshold=np.nan)
 # Base learning rate 
@@ -16,7 +15,7 @@ RANDOM_SEED = 1234
 N_ACTIONS = 4
 SIZE_FRAME = 84
 
-def trainer(MINIBATCH_SIZE=32, GAMMA = 0.99,save=1, save_image=1, epsilon=1.0, min_epsilon=0.1, BUFFER_SIZE=500000, train_indicator=True, render = True):
+def trainer(MINIBATCH_SIZE=32, GAMMA = 0.99, save=True, epsilon=1.0, min_epsilon=0.1, BUFFER_SIZE=500000, train_indicator=True, render = True):
     with tf.Session() as sess:
 
         # configuring the random processes
@@ -49,7 +48,7 @@ def trainer(MINIBATCH_SIZE=32, GAMMA = 0.99,save=1, save_image=1, epsilon=1.0, m
                 print('********************************')
                 print('models restored succesfully')
                 print('********************************')
-            except:
+            except tf.errors.NotFoundError:
                 print('********************************')
                 print('Failed to restore models')
                 print('********************************')
@@ -158,4 +157,4 @@ def trainer(MINIBATCH_SIZE=32, GAMMA = 0.99,save=1, save_image=1, epsilon=1.0, m
 
 
 if __name__ == '__main__':
-    trainer(save_image = False, epsilon= 1. , train_indicator = True) 
+    trainer(epsilon= 1. , train_indicator = True) 

@@ -3,6 +3,7 @@ import numpy as np
 import cv2
 import tensorflow as tf
 import time 
+import wrappers as wp
 
 tf.enable_eager_execution()
 
@@ -27,6 +28,8 @@ print(stacked, stacked.shape)
 #cv2.waitKey(0)
 
 '''
+
+'''
 output = tf.image.rgb_to_grayscale(state)
 
 output = tf.image.crop_to_bounding_box(output, 34, 0, 160, 160)
@@ -38,3 +41,12 @@ cv2.imshow('image', output.numpy())
 
 cv2.waitKey(0)
 '''
+
+env = wp.wrap_dqn(gym.make('BreakoutDeterministic-v4'))
+state = env.reset()
+done = False
+for _ in range(50):
+	if not done: 
+		next_state, reward, done, info = env.step(1)
+		print('state', next_state, 'done', done)
+		time.sleep(0.1)
