@@ -5,17 +5,36 @@ from q_network import Network
 import gym
 import wrappers as wp
 from collections import deque
+import argparse
+from utils import str2bool
 
-
-DEVICE = '/gpu:0'
 np.set_printoptions(threshold=np.nan)
 # Base learning rate 
+
+
+
+
+parser = argparse.ArgumentParser('DQN')
+parser.add_argument('--gpu', type=str, choices=['gpu', 'cpu'], default='gpu')
+parser.add_argument('--epochs', type=int, default=2000)
+parser.add_argument('--sim', type=int, default=150)
+parser.add_argument('--epsilon', type=float, default=1.)
+parser.add_argument("--train", type=str2bool, nargs='?', const=True, default=True, help="Activate train mode.")
+parser.add_argument("--save", type=str2bool, nargs='?', const=True, default=True, help="Activate save models")
+parser.add_argument("--load", type=str2bool, nargs='?', const=True, default=False, help="Activate save models")
+parser.add_argument('--epsilon_decay', type=float, default=0.0002)
+args = parser.parse_args()
+
 LEARNING_RATE = 0.0001
 RANDOM_SEED = 1234
 N_ACTIONS = 4
 SIZE_FRAME = 84
 
-def trainer(MINIBATCH_SIZE=32, GAMMA = 0.99, save=True, epsilon=1.0, min_epsilon=0.1, BUFFER_SIZE=500000, train_indicator=True, render = True):
+DEVICE ='/' + args.gpu + ':0' # '/cpu:0'
+
+
+
+def trainer(MINIBATCH_SIZE=32, GAMMA = 0.99,load=True ,save=True, epsilon=1.0, min_epsilon=0.1, BUFFER_SIZE=500000, train_indicator=True, render = True):
     with tf.Session() as sess:
 
         # configuring the random processes
@@ -42,7 +61,7 @@ def trainer(MINIBATCH_SIZE=32, GAMMA = 0.99, save=True, epsilon=1.0, min_epsilon
         replay_buffer.load()
         print('buffer size is now',replay_buffer.count)
         # this is for loading the net  
-        if save:
+        if load:
             try:
                 agent.recover()
                 print('********************************')
@@ -158,4 +177,4 @@ def trainer(MINIBATCH_SIZE=32, GAMMA = 0.99, save=True, epsilon=1.0, min_epsilon
 
 
 if __name__ == '__main__':
-    trainer(epsilon= 1. , train_indicator = True) 
+    trainer(epsilon=args.epsilon , train_indicator = args.train, load=args.load) 

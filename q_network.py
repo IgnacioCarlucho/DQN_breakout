@@ -121,15 +121,15 @@ class Network(object):
         return self.num_trainable_vars
     
     def save(self):
-        self.saver.save(self.sess,'./model.ckpt')
-        self.target_saver.save(self.sess,'./model_target.ckpt')
+        self.saver.save(self.sess,'./models/model.ckpt')
+        self.target_saver.save(self.sess,'./models/model_target.ckpt')
         #saver.save(self.sess,'actor_model.ckpt')
         print("Model saved in file: model")
 
     
     def recover(self):
-        self.saver.restore(self.sess,'./model.ckpt')
-        self.target_saver.restore(self.sess,'./model_target.ckpt')
+        self.saver.restore(self.sess,'./models/model.ckpt')
+        self.target_saver.restore(self.sess,'./models/model_target.ckpt')
         #saver.restore(self.sess,'critic_model.ckpt')
     
     def conv2d(self,x, W, stride):
