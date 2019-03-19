@@ -107,6 +107,7 @@ def trainer(MINIBATCH_SIZE=32, GAMMA = 0.99, save=True, epsilon=1.0, min_epsilon
                     action = np.argmax(q0)
                 
                 next_state, reward, done, info = env.step(action)#env.step(action)
+                # env.render()
                 # state = observation
 
                 
